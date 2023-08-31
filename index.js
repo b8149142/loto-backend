@@ -7,6 +7,7 @@ const cors = require("cors");
 const cookieParser = require("cookie-parser");
 const router = require("./router/index");
 const errorMiddleware = require("./middlewares/error-middleware");
+const axios = require("axios");
 const { Sequelize } = require("sequelize");
 const {
   Loto,
@@ -15,6 +16,7 @@ const {
   LotoSetting,
   Stats,
   BotStats,
+  Bot,
 } = require("./models/db-models");
 const AdminLotoService = require("./service/loto-admin-service");
 const gameService = require("./service/game-service");
@@ -40,6 +42,14 @@ const start = async () => {
     await sequelize.authenticate();
     await sequelize.sync();
 
+    // for (let i = 0; i < 20; i++) {
+    //   const randomUserdata = await axios.get(
+    //     "https://random-data-api.com/api/v2/users"
+    //   );
+    //   const username = randomUserdata.data.first_name;
+    //   await Bot.create({ username });
+    // }
+
     // await LotoGame.update(
     //   {
     //     bots: 0,
@@ -62,21 +72,21 @@ const start = async () => {
     // await LotoGame.create({ gameLevel: 5 });
     // await LotoSetting.create({
     //   gameLevel: 1,
-    //   allowBots: 1,
+    //   allowBots: true,
     //   maxBots: 4,
     //   maxTickets: 6,
     //   winChance: 20,
     // });
     // await LotoSetting.create({
     //   gameLevel: 2,
-    //   allowBots: 1,
+    //   allowBots: true,
     //   maxBots: 4,
     //   maxTickets: 6,
     //   winChance: 20,
     // });
     // await LotoSetting.create({
     //   gameLevel: 3,
-    //   allowBots: 1,
+    //   allowBots: true,
     //   maxBots: 4,
     //   maxTickets: 6,
     //   winChance: 20,
@@ -84,17 +94,24 @@ const start = async () => {
 
     // await LotoSetting.create({
     //   gameLevel: 4,
-    //   allowBots: 1,
+    //   allowBots: true,
     //   maxBots: 4,
     //   maxTickets: 6,
     //   winChance: 20,
     // });
     // await LotoSetting.create({
     //   gameLevel: 5,
-    //   allowBots: 1,
+    //   allowBots: true,
     //   maxBots: 4,
     //   maxTickets: 6,
     //   winChance: 20,
+    // });
+
+    // await Stats.create({
+    //   userId: 1,
+    // });
+    // await Stats.create({
+    //   userId: 4,
     // });
 
     app.listen(PORT, () => console.log(`Server started on PORT = ${PORT}`));
@@ -186,16 +203,31 @@ app.ws("/game", (ws, req) => {
         break;
 
       case "connectGame":
-        let timerStarted = await isTimerStarted(msg);
+        // let timerStarted;
+        // // get online (bots and players) in room
+        // const gameState = await LotoGame.findOne({
+        //   where: { gameLevel: msg.roomId },
+        // });
 
-        if (!timerStarted) {
-          setTimeout(async () => {
-            // check cards
-            await gameService.startLotoGame(ws, aWss, msg);
-          }, 30000);
-        }
+        // if (gameState.isWaiting && gameState.startedAt != null) {
+        //   timerStarted = true;
+        // } else timerStarted = false;
 
+        // let roomOnlineWithBots = await checkPeopleOnline(msg.roomId);
+
+        // roomOnlineWithBots += gameState.bots;
+
+        // // начало игры
+        // if (roomOnlineWithBots >= 3 && gameState.isWaiting == false) {
+        //   if (!timerStarted) {
+        //     setTimeout(async () => {
+        //       await gameService.startLotoGame(ws, aWss, msg);
+        //     }, 30000);
+        //   }
+        // }
         await gameConnectionHandler(ws, msg);
+
+        await gameService.startRoomLobby(ws, aWss, msg);
 
         await gameService.checkBet(ws, aWss, msg);
         await roomsFunctions.checkJackpot(ws, aWss, msg);
@@ -206,34 +238,36 @@ app.ws("/game", (ws, req) => {
         //   bank: gameRoomsBet,
         // });
 
-        await AdminLotoService.createBot(ws, aWss, msg);
-
         break;
       case "buyTickets":
         let isBought = await gameService.gameBuyTickets(ws, msg);
         if (isBought) {
           sendTicketsToClient(ws, msg);
+          await AdminLotoService.createBot(ws, aWss, msg);
         } else {
           ws.send(JSON.stringify({ method: "buyTickets", isBought: false }));
         }
         break;
+      case "cancelCard":
+        const cardId = msg.cardId;
+        await LotoCard.update({ isActive: false }, { where: { id: cardId } });
     }
   });
 
   ws.on("close", async (status, msg) => {
     if (status > 1000) {
-      let roomOnline = await checkPeopleOnline();
-      let gameStates = await LotoGame.findAll();
+      // let roomOnline = await checkPeopleOnline();
+      // let gameStates = await LotoGame.findAll();
 
-      for (const game of gameStates) {
-        if (
-          game.bots > 0 &&
-          Boolean(game.isStarted) == false &&
-          Boolean(game.isWaiting) == false
-        ) {
-          await lotoAdminService.deleteBots(roomOnline);
-        }
-      }
+      // for (const game of gameStates) {
+      //   if (
+      //     game.bots > 0 &&
+      //     Boolean(game.isStarted) == false &&
+      //     Boolean(game.isWaiting) == false
+      //   ) {
+      //     await lotoAdminService.deleteBots(roomOnline);
+      //   }
+      // }
 
       // removeTimeout(roomOnline);
 
@@ -399,16 +433,16 @@ const broadcastGame = async (ws, msg) => {
     }
   });
 
-  // запуск таймера
-  let timerStarted = await startRoomTimer(msg);
-  if (timerStarted) {
-    msg.startedAt = timerStarted;
-    // отправка всем о начале игры в меню
-    let roomsStartTimer = await roomsFunctions.getAllRoomsStartTimers();
-    roomsFunctions.sendAll(aWss, "allRoomsStartTimers", {
-      timers: roomsStartTimer,
-    });
-  }
+  // // запуск таймера
+  // let timerStartedAt = await startRoomTimer(msg);
+  // if (timerStartedAt) {
+  //   msg.startedAt = timerStartedAt;
+  //   // отправка всем о начале игры в меню
+  //   let roomsStartTimer = await roomsFunctions.getAllRoomsStartTimers();
+  //   roomsFunctions.sendAll(aWss, "allRoomsStartTimers", {
+  //     timers: roomsStartTimer,
+  //   });
+  // }
 
   // получение информации об игре
   const game = await LotoGame.findOne({

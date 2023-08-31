@@ -7,9 +7,11 @@ const {
   Stats,
   BotStats,
   UserGame,
+  Bot,
 } = require("../models/db-models");
 const lotoAdminService = require("./loto-admin-service");
 const roomsFunctions = require("./loto-rooms-functions");
+const axios = require("axios");
 const { literal } = require("sequelize");
 
 class GameService {
@@ -106,6 +108,7 @@ class GameService {
       // получаем все билеты для комнаты
       const lotoCards = await LotoCard.findAll({
         where: { gameLevel: msg.roomId },
+        include: User,
       });
 
       let lotoCardsArray = [];
@@ -162,6 +165,37 @@ class GameService {
       });
       finalists.winners.index = minimum;
 
+      // finalists.winners.data = [];
+      // finalists.winners.tickets.forEach((ticketId) => {
+      //   const ticket = lotoCards.find((ticket) => ticket.id == ticketId);
+      //   const card = JSON.parse(ticket.card);
+      //   const userName = ticket.user.username;
+
+      //   finalists.winners.data.push({ userName, card, ticketId });
+      // });
+      // // {userName: bebra, card: [fdf, fdf, dfd]}, {userName: bebra, card: [fdf12, fdf4, dfd]}
+
+      // finalists.winners.data = finalists.winners.data.reduce(
+      //   (result, currentItem) => {
+      //     const existingUser = result.find(
+      //       (user) => user.userName === currentItem.userName
+      //     );
+
+      //     if (existingUser) {
+      //       existingUser.cards.push(currentItem.card);
+      //     } else {
+      //       result.push({
+      //         userName: currentItem.userName,
+      //         cards: [currentItem.card],
+      //       });
+      //     }
+
+      //     return result;
+      //   },
+      //   []
+      // );
+      // = > {userName: bebra, cards: [[fdf, fdf, dfd], [fdf12, fdf4, dfd]]}
+
       let botWinnerIndex = 90;
 
       if (isBotWon) {
@@ -171,6 +205,7 @@ class GameService {
         } else {
           botWinnerIndex = 16;
         }
+
         finalists.winners.index = botWinnerIndex;
         finalists.winners.tickets = [];
 
@@ -226,12 +261,10 @@ class GameService {
         }
       }
 
-      console.log(finalists);
-
       // добавляем в базу информацию когда текущая игра заканчивается.
       await LotoGame.update(
         {
-          finishesAt: new Date().getTime() + minimum * 1000 + 15000,
+          finishesAt: new Date().getTime() + minimum * 1000 + 25000,
           isStarted: true,
         },
         { where: { gameLevel: msg.roomId } }
@@ -275,16 +308,14 @@ class GameService {
             online: roomOnline,
             bank: (lotoCards.length + botsTicketsNum) * roomComminsionInfo.bet,
             method: "openGame",
-            jackpot:
-              roomComminsionInfo.jackpotPart *
-              (lotoCards.length + botsTicketsNum),
+            jackpot: game.jackpot,
             roomId: msg.roomId,
           };
           client.send(JSON.stringify(openGameMsg));
         }
       }
 
-      // записываем статистику боту
+      // записываем статистику ботам
       const botStat = await BotStats.findOne({ where: { id: 1 } });
       await BotStats.update(
         {
@@ -296,10 +327,22 @@ class GameService {
         },
         { where: { id: botStat.id } }
       );
+      // if (isBotWon) {
+      //   const bots = await Bot.findAll();
+      //   const randomBot = bots[Math.floor(Math.random() * bots.length)];
+      //   let { tokens } = roomsFunctions.getRoomCommisionInfo(msg.roomId);
+      //   await randomBot.update({
+      //     moneyLotoWon:
+      //       randomBot.moneyLotoWon + lotoCards.length * roomComminsionInfo.bet,
+      //     lotoTokens: randomBot.lotoTokens + tokens,
+      //   });
+      // }
 
       // делаем онлайн выдачу карточек и расчет времени игры
+
+      console.log(finalists);
+
       await giveCasksOnline(
-        ws,
         aWss,
         msg.roomId,
         casks,
@@ -308,7 +351,9 @@ class GameService {
         amountOfWinnerTickets,
         botsTicketsNum,
         roomComminsionInfo.bet,
-        roomComminsionInfo.fullBet
+        roomComminsionInfo.fullBet,
+        game,
+        settings
       );
     } catch (error) {
       console.log(error);
@@ -368,6 +413,11 @@ class GameService {
         })
       );
 
+      await roomsFunctions.updateJackpot(
+        msg.roomId,
+        tickets.length * roomComminsionInfo.jackpotPart
+      );
+
       for (let i = 0; i < tickets.length; i++) {
         await LotoCard.create({
           id: tickets[i].ticketId,
@@ -405,12 +455,59 @@ class GameService {
       }
     }
   }
+
+  async startRoomLobby(ws, aWss, msg) {
+    const game = await LotoGame.findOne({
+      where: { gameLevel: msg.roomId },
+    });
+
+    if (game.isWaiting && game.startedAt != null) {
+      return;
+    }
+
+    // получаем весь онлайн вместе с ботами
+    let roomOnline = 0;
+    aWss.clients.forEach((client) => {
+      if (client.roomId == msg.roomId) {
+        roomOnline++;
+      }
+    });
+
+    roomOnline += game.bots;
+
+    if (roomOnline >= 3 && game.isWaiting == false) {
+      // начало игры
+
+      setTimeout(async () => {
+        await this.startLotoGame(ws, aWss, msg);
+      }, 30000);
+
+      // запуск таймера
+      await game.update({ isWaiting: true, startedAt: new Date().getTime() });
+      // msg.startedAt = new Date();
+      // отправка информации на клиентов в комнате
+      for (const client of aWss.clients) {
+        if (client.roomId == msg.roomId) {
+          let roomTimerMsg = {
+            room: msg.roomId,
+            method: "updateRoomTimer",
+            startedAt: new Date(),
+          };
+          client.send(JSON.stringify(roomTimerMsg));
+        }
+      }
+      // отправка всем о начале игры в меню
+      let roomsStartTimer = await roomsFunctions.getAllRoomsStartTimers();
+      roomsFunctions.sendAll(aWss, "allRoomsStartTimers", {
+        timers: roomsStartTimer,
+      });
+    }
+  }
 }
 
 module.exports = new GameService();
 
 async function giveCasksOnline(
-  ws,
   aWss,
   roomId,
   casks,
@@ -419,14 +516,17 @@ async function giveCasksOnline(
   amountOfWinnerTickets,
   botsTicketsNum,
   bet,
-  fullBet
+  fullBet,
+  game,
+  settings
 ) {
   let winnerCaskId = finalists.winners.index;
   let left1Ids = finalists.left1;
   let left2Ids = finalists.left2;
   let left3Ids = finalists.left3;
 
-  let tokens = roomsFunctions.getRoomCommisionInfo(roomId).tokens;
+  let { tokens, jackpotAnimationSum } =
+    roomsFunctions.getRoomCommisionInfo(roomId);
 
   await sendCasksWithDelay(casks, winnerCaskId, roomId);
   async function sendCasksWithDelay(casks, winnerCaskId, roomId) {
@@ -436,12 +536,19 @@ async function giveCasksOnline(
     let left2Cask = 0;
     let left1Cask = 0;
     let isJackpotWon = false;
-    const jackpotCheckLimit = 25;
+    let jackpotData = { isJackpotWon: false };
+    const jackpotCheckLimit = settings.jackpotCheckLimit;
+    const canBotWinJackpot = settings.canBotWinJackpot;
 
     const allTickets = await LotoCard.findAll({
       where: { gameLevel: roomId },
     });
-    const allUsers = await User.findAll();
+    let allUsers = await User.findAll();
+
+    const roomsJackpots = await roomsFunctions.checkAllJackpots();
+    const jackpotSum = roomsJackpots[`room${roomId}`];
+
+    jackpotData.jackpotSum = jackpotSum;
 
     async function sendNextCask() {
       if (index < casks.length) {
@@ -456,39 +563,180 @@ async function giveCasksOnline(
         broadcastGame(aWss, roomId, caskMessage);
 
         // проверка на джекпот
-        if (pastCasks.length < jackpotCheckLimit) {
-          if (!isJackpotWon) {
-            const jackpotWinner = checkJackpotWon(allTickets, pastCasks);
-            if (jackpotWinner) {
+        if (game.jackpot > jackpotAnimationSum) {
+          if (canBotWinJackpot) {
+            if (pastCasks.length === 10) {
+              // make bot win jackpot
+              await LotoGame.update(
+                { jackpot: 0 },
+                { where: { gameLevel: roomId } }
+              );
+
+              const bots = await Bot.findAll();
+              const randomBot = bots[Math.floor(Math.random() * bots.length)];
+              await randomBot.update({
+                moneyLotoWon: randomBot.moneyLotoWon + jackpotSum,
+              });
               isJackpotWon = true;
-              await handleJackpotWin(roomId, jackpotWinner, allUsers, aWss);
+              jackpotData.isJackpotWon = true;
+              jackpotData.jackpotWinnerName = randomBot.username;
+
+              for (const client of aWss.clients) {
+                if (client.roomId == roomId) {
+                  client.send(
+                    JSON.stringify({
+                      method: "jackpotWon",
+                      winner: 0,
+                      winnerName: randomBot.username,
+                      sum: jackpotSum,
+                    })
+                  );
+                }
+              }
+            }
+          }
+
+          if (pastCasks.length < jackpotCheckLimit && !canBotWinJackpot) {
+            if (!isJackpotWon) {
+              const jackpotWinner = checkJackpotWon(allTickets, pastCasks);
+              if (jackpotWinner) {
+                isJackpotWon = true;
+                jackpotData.isJackpotWon = true;
+                jackpotData.jackpotWinnerId = jackpotWinner;
+                const winner = allUsers.find(
+                  (user) => user.id == jackpotWinner
+                );
+                if (winner) {
+                  jackpotData.jackpotWinnerName = winner.username;
+                }
+                // const roomsJackpots = await roomsFunctions.checkAllJackpots();
+                // const jackpotSum = roomsJackpots[`room${roomId}`];
+                // jackpotData.jackpotSum = jackpotSum;
+
+                await handleJackpotWin(
+                  roomId,
+                  jackpotWinner,
+                  allUsers,
+                  jackpotSum,
+                  aWss,
+                  game
+                );
+
+                // получаем всех юзеров после выигрыша джекпота
+                allUsers = await User.findAll();
+              }
             }
           }
         }
 
         // проверка на победителя
         if (casks.indexOf(cask) === winnerCaskId) {
+          const currentTickets = await LotoCard.findAll({
+            where: { gameLevel: roomId },
+            include: User,
+          });
+
+          // choose tickets that are not active
+          let notActiveTickets = currentTickets.filter(
+            (ticket) => ticket.isActive == false
+          );
+          notActiveTickets = notActiveTickets.map((ticket) => ticket.id);
+
+          finalists.winners.tickets = finalists.winners.tickets.filter(
+            (ticketId) => !notActiveTickets.includes(ticketId)
+          );
+
+          finalists.winners.data = [];
+          if (finalists.winners.tickets.length > 0) {
+            finalists.winners.tickets.forEach((ticketId) => {
+              const ticket = currentTickets.find(
+                (ticket) => ticket.id == ticketId
+              );
+              const card = JSON.parse(ticket.card);
+              const userName = ticket.user.username;
+
+              finalists.winners.data.push({ userName, card, ticketId });
+            });
+            // {userName: bebra, card: [fdf, fdf, dfd]}, {userName: bebra, card: [fdf12, fdf4, dfd]}
+
+            finalists.winners.data = finalists.winners.data.reduce(
+              (result, currentItem) => {
+                const existingUser = result.find(
+                  (user) => user.userName === currentItem.userName
+                );
+
+                if (existingUser) {
+                  existingUser.cards.push(currentItem.card);
+                } else {
+                  result.push({
+                    userName: currentItem.userName,
+                    cards: [currentItem.card],
+                  });
+                }
+
+                return result;
+              },
+              []
+            );
+          } else {
+            const bots = await Bot.findAll();
+            const randomBot = bots[Math.floor(Math.random() * bots.length)];
+            let roomComminsionInfo =
+              roomsFunctions.getRoomCommisionInfo(roomId);
+            console.log(roomComminsionInfo);
+            await randomBot.update({
+              moneyLotoWon: randomBot.moneyLotoWon + bank,
+              lotoTokens: randomBot.lotoTokens + roomComminsionInfo.tokens,
+            });
+
+            let botInfo = { userName: randomBot.username };
+            botInfo.cards = [
+              generateFakeBotCard(finalists.winners.index, casks).cards,
+            ];
+            finalists.winners.index = winnerCaskId;
+            finalists.winners.tickets = [];
+            finalists.winners.data = [botInfo];
+          }
+
+          console.log(finalists);
+          console.log(finalists.winners.data);
+
+          // delete users that dont have tickets from finalists.winners.data
+          finalists.winners.data = finalists.winners.data.filter(
+            (data) => data.cards.length > 0
+          );
+
+          console.log(finalists.winners.data);
+          // {userName: bebra, cards: [[fdf, fdf, dfd], [fdf12, fdf4, dfd]]}
+
+          // отправляем вообщение об выиграной игре
           let winMessage = {
             method: "winGame",
             winners: finalists.winners.tickets,
             bank: bank,
             winnersAmount: amountOfWinnerTickets,
             isJackpotWon,
+            jackpotData,
+            winnersData: finalists.winners.data,
           };
 
           // обновление баланса и статистики
 
           let winnerTickets = [];
+          let loserTickets = [];
 
           allTickets.forEach((ticket) => {
             if (finalists.winners.tickets.includes(ticket.id)) {
               winnerTickets.push(ticket);
+            } else {
+              loserTickets.push(ticket);
             }
           });
 
           // получаем суму выиграша для 1 юзера в зависимости от количества билетов
           let userWinSum = bank / winnerTickets.length;
           let userIds = [];
+          let loserIds = [];
 
           // даем каждому пользователю токены
 
@@ -524,6 +772,14 @@ async function giveCasksOnline(
                     loseSum: 0,
                   });
                 }
+              }
+            }
+          }
+
+          for (const ticket of loserTickets) {
+            for (const user of allUsers) {
+              if (user.id == ticket.userId) {
+                loserIds.push(user.id);
               }
             }
           }
@@ -593,12 +849,12 @@ async function giveCasksOnline(
 
           // обновляем статистику всем проигравшим, добавляем в статистику проигрыш и количество игр
           for (const user of allUsers) {
-            if (!userIds.includes(user.id)) {
+            if (loserIds.includes(user.id)) {
               await Stats.update(
                 {
                   moneyLotoLost:
                     stats.find((stat) => stat.userId == user.id).moneyLotoLost +
-                    bet *
+                    fullBet *
                       allTickets.filter((ticket) => ticket.userId == user.id)
                         .length,
                   gameLotoPlayed:
@@ -674,7 +930,7 @@ async function giveCasksOnline(
             roomsFunctions.sendAll(aWss, "updateAllRoomsPrevBank", {
               prevBank: prevBank,
             });
-          }, 10000);
+          }, 20000);
           return;
         }
 
@@ -775,10 +1031,14 @@ async function getAllRoomsFinishTimers(aWss) {
   };
 
   const rooms = await LotoGame.findAll();
-  for (let gameLevel = 1; gameLevel <= 5; gameLevel++) {
-    const room = rooms.find((room) => room.gameLevel == gameLevel);
-    roomTimers[`room${gameLevel}`] = room.finishesAt;
-  }
+  // for (let gameLevel = 1; gameLevel <= 5; gameLevel++) {
+  //   const room = rooms.find((room) => room.gameLevel == gameLevel);
+  //   roomTimers[`room${gameLevel}`] = room.finishesAt;
+  // }
+
+  rooms.forEach((room) => {
+    roomTimers[`room${room.gameLevel}`] = room.finishesAt;
+  });
 
   const timersMessage = {
     method: "allRoomsFinishTimers",
@@ -789,15 +1049,19 @@ async function getAllRoomsFinishTimers(aWss) {
   }
 }
 
-async function handleJackpotWin(roomId, jackpotWinner, allUsers, aWss) {
-  const roomsJackpots = await roomsFunctions.checkAllJackpots();
-  const jackpotSum = roomsJackpots[`room${roomId}`];
-
+async function handleJackpotWin(
+  roomId,
+  jackpotWinner,
+  allUsers,
+  jackpotSum,
+  aWss
+) {
   // обновляем статистику и баланс победителю
   const winner = allUsers.find((user) => user.id == jackpotWinner);
+
   await User.update(
     { balance: winner.balance + jackpotSum },
-    { where: { id: winner.id } }
+    { where: { id: +winner.id } }
   );
   const winnerStats = await Stats.findOne({
     where: { userId: jackpotWinner },
@@ -808,6 +1072,7 @@ async function handleJackpotWin(roomId, jackpotWinner, allUsers, aWss) {
     },
     { where: { userId: jackpotWinner } }
   );
+  await LotoGame.update({ jackpot: 0 }, { where: { gameLevel: roomId } });
 
   // рассылаем всем сообщение о выиграше джекпота
   for (const client of aWss.clients) {
@@ -894,4 +1159,149 @@ function generateCasks() {
   }
 
   return shuffleArray(lotoCard[0]);
+}
+
+function generateFakeBotCard(lastIndex, casks) {
+  const lastNumber = casks[lastIndex];
+  const pastCasks = casks.slice(0, lastIndex);
+
+  let card = generateLotoCard();
+  // check if all numbers are in past casks
+  let isCardValid = false;
+  while (!isCardValid) {
+    isCardValid = true;
+    for (let i = 0; i < 27; i++) {
+      if (card.cards[i] != " ") {
+        if (!pastCasks.includes(card.cards[i])) {
+          isCardValid = false;
+        }
+      }
+    }
+
+    if (!isCardValid) {
+      card = generateLotoCard();
+    }
+  }
+
+  // insert last number in its column instead of existing number
+  let isInserted = false;
+  for (let i = 0; i < 3; i++) {
+    let index = i * 9 + Math.floor(lastNumber / 10) - 1;
+    if (card.cards[index] != " " && !isInserted) {
+      isInserted = true;
+      card.cards[index] = lastNumber;
+    }
+  }
+
+  return card;
+}
+
+function generateRandomNumbersWithoutRepeats(min, max, count) {
+  if (count > max - min + 1) {
+    throw new Error("Can't generate random numbers without repeats");
+  }
+
+  let numbers = [];
+  while (numbers.length < count) {
+    let randomNumber = Math.floor(Math.random() * (max - min + 1)) + min;
+    if (!numbers.includes(randomNumber)) {
+      numbers.push(randomNumber);
+    }
+  }
+
+  return numbers;
+}
+
+const deleteNumbers = (card) => {
+  const newCard = [...card];
+  // delete 4 numbers from each row
+
+  for (let i = 0; i < 3; i++) {
+    let row = newCard.slice(i * 9, i * 9 + 9);
+    let numbers = [];
+    for (let j = 0; j < 9; j++) {
+      if (row[j] != " ") {
+        numbers.push(j);
+      }
+    }
+
+    let numbersToDelete = generateRandomNumbersWithoutRepeats(0, 8, 4);
+    numbersToDelete.forEach((number) => {
+      row[number] = " ";
+    });
+
+    for (let j = 0; j < 9; j++) {
+      newCard[i * 9 + j] = row[j];
+    }
+  }
+
+  return newCard;
+};
+
+function generateLotoCard() {
+  let card = [];
+
+  for (let i = 0; i < 27; i++) {
+    card.push(0);
+  }
+
+  for (let i = 1; i <= 9; i++) {
+    const column = generateRandomNumbersWithoutRepeats(i * 10 - 9, i * 10, 3);
+
+    for (let j = 0; j < 3; j++) {
+      let index = j * 9 + i - 1;
+      card[index] = column[j];
+    }
+  }
+
+  let isValid = false;
+  let newCard;
+
+  while (!isValid) {
+    isValid = true;
+    newCard = deleteNumbers(card);
+
+    for (let i = 0; i < 9; i++) {
+      if (
+        newCard[i] == " " &&
+        newCard[i + 9] == " " &&
+        newCard[i + 18] == " "
+      ) {
+        isValid = false;
+      }
+    }
+
+    let rows = [];
+    for (let i = 1; i <= 3; i++) {
+      for (let j = 0; j < 9; j++) {
+        rows.push(newCard[j]);
+      }
+    }
+
+    // check if each row has 5 numbers
+    for (let i = 0; i < 27; i += 9) {
+      let row = rows.slice(i, i + 9);
+      let count = 0;
+      row.forEach((cell) => {
+        if (cell != " ") {
+          count++;
+        }
+      });
+
+      if (count != 5) {
+        isValid = false;
+      }
+    }
+  }
+
+  // make unique id
+  let id = "";
+  for (let i = 0; i < 27; i++) {
+    if (newCard[i] != " ") {
+      id += newCard[i];
+    }
+  }
+  id += new Date().getTime();
+
+  return { cards: newCard };
 }

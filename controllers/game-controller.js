@@ -345,6 +345,41 @@ class GameController {
     }
   }
 
+  async deleteCards(req, res) {
+    try {
+      const userId = req.user.id;
+      const { roomId } = req.query;
+      await LotoCard.destroy({ where: { userId, gameLevel: +roomId } });
+      return res.status(200).json("Cards deleted");
+    } catch (e) {
+      return res.status(400).json(e);
+      console.log(e);
+    }
+  }
+
+  async deleteCardsReturnBalance(req, res) {
+    try {
+      const userId = req.user.id;
+      const { roomId, bet } = req.query;
+      const userCards = await LotoCard.findAll({
+        where: { userId, gameLevel: +roomId },
+      });
+      await LotoCard.destroy({ where: { userId, gameLevel: +roomId } });
+
+      const user = await User.findOne({ where: { id: userId } });
+      await User.update(
+        { balance: user.balance + Number(bet) * userCards.length },
+        { where: { id: userId } }
+      );
+      return res
+        .status(200)
+        .json({ balance: user.balance + Number(bet) * userCards.length });
+    } catch (e) {
+      return res.status(400).json(e);
+      console.log(e);
+    }
+  }
+
   async getMessages(req, res) {
     let roomId = req.query.roomId;
     let userId = req.user.id;

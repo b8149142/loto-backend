@@ -4,7 +4,14 @@ const mailService = require("./mail-service");
 const tokenService = require("./token-service");
 const UserDto = require("../dtos/user-dto");
 const ApiError = require("../exceptions/api-error");
-const { User, Role, Rate, Stats, BotStats } = require("../models/db-models");
+const {
+  User,
+  Role,
+  Rate,
+  Stats,
+  BotStats,
+  Bot,
+} = require("../models/db-models");
 
 class UserService {
   async registrationUser(username, name, email, password) {
@@ -86,6 +93,7 @@ class UserService {
 
   async getLeaders(gameType) {
     let allStats = await Stats.findAll({ include: User });
+    const bots = await Bot.findAll();
 
     if (gameType == "loto") {
       //получаем всех юзеров з лото
@@ -98,6 +106,16 @@ class UserService {
             tokens: user.lotoTokens,
           };
           lotoStats.push(userDto);
+        }
+      });
+      bots.forEach((bot) => {
+        if (bot.lotoTokens > 0) {
+          let botDto = {
+            username: bot.username,
+            moneyWon: bot.moneyLotoWon,
+            tokens: bot.lotoTokens,
+          };
+          lotoStats.push(botDto);
         }
       });
       return lotoStats;
@@ -114,6 +132,16 @@ class UserService {
           nardsStats.push(userDto);
         }
       });
+      bots.forEach((bot) => {
+        if (bot.gameNardsPlayed > 0) {
+          let botDto = {
+            username: bot.username,
+            moneyWon: bot.moneyNardsWon,
+            tokens: bot.nardsTokens,
+          };
+          nardsStats.push(botDto);
+        }
+      });
       return nardsStats;
     } else if (gameType == "domino") {
       //получаем всех юзеров з лото
@@ -126,6 +154,16 @@ class UserService {
             tokens: user.dominoTokens,
           };
           dominoStats.push(userDto);
+        }
+      });
+      bots.forEach((bot) => {
+        if (bot.gameDominoPlayed > 0) {
+          let botDto = {
+            username: bot.username,
+            moneyWon: bot.moneyDominoWon,
+            tokens: bot.dominoTokens,
+          };
+          dominoStats.push(botDto);
         }
       });
       return dominoStats;

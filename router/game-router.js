@@ -17,6 +17,11 @@ router.put("/finish-loto-waiting/:roomId", gameController.finishLotoWaiting);
 router.post("/create-card", gameController.createCards);
 router.get("/get-card", gameController.getCards);
 router.delete("/delete-card/:cardId", gameController.deleteCard);
+router.delete("/delete-cards/", gameController.deleteCards);
+router.delete(
+  "/delete-cards-balance/",
+  gameController.deleteCardsReturnBalance
+);
 router.get("/get-messages", gameController.getMessages);
 
 router.post("/test", gameController.test);

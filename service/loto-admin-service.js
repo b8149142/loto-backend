@@ -16,6 +16,7 @@ const roomsFunctions = require("./loto-rooms-functions");
 
 class AdminLotoService {
   async createBot(ws, aWss, msg) {
+    const roomComminsionInfo = roomsFunctions.getRoomCommisionInfo(msg.roomId);
     const setting = await LotoSetting.findOne({
       where: { gameLevel: msg.roomId },
     });
@@ -26,7 +27,7 @@ class AdminLotoService {
       if (prev.isStarted == true) {
         return;
       }
-      if (prev.isWaiting == true && prev.bots < setting.maxBots) {
+      if (prev.bots < setting.maxBots) {
         // добавляем бота и карточки бота в базу карточек ботов
         const number = Math.floor(
           Math.random() * (setting.maxTickets - 0.01) + 1
@@ -45,6 +46,10 @@ class AdminLotoService {
           },
           { where: { gameLevel: msg.roomId } }
         );
+        // обновляем банк и отправляем на клиент
+        const gameService = require("./game-service");
+        // проверка есть ли 3 человека в комнате
+        await gameService.startRoomLobby(ws, aWss, msg);
 
         // обновляем онлайн и отправляем на клиентов
 
@@ -69,18 +74,23 @@ class AdminLotoService {
         let rooms = await roomsFunctions.getAllRoomsOnline(aWss);
         roomsFunctions.sendAll(aWss, "allRoomsOnline", { rooms: rooms });
 
-        // обновляем банк и отправляем на клиент
-        const gameService = require("./game-service");
-
         // отправка всем в комнате о ставке
         await gameService.checkBet(ws, aWss, msg);
         await roomsFunctions.checkJackpot(ws, aWss, msg);
 
         // отправка всем о джекпотах в меню
+        await roomsFunctions.updateJackpot(
+          msg.roomId,
+          JSON.parse(newBotsTickets.length) * roomComminsionInfo.jackpotPart,
+          prev
+        );
         let roomsJackpots = await roomsFunctions.checkAllJackpots();
         roomsFunctions.sendAll(aWss, "updateAllRoomsJackpot", {
           jackpots: roomsJackpots,
         });
+
+        // отправка всем о джекпоте в игре
+        await roomsFunctions.checkJackpot(ws, aWss, msg);
 
         // отправка всем о ставке в меню
         let roomsBet = await roomsFunctions.checkAllBets();
