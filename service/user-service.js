@@ -1,6 +1,5 @@
 const bcrypt = require("bcrypt");
 const uuid = require("uuid");
-const mailService = require("./mail-service");
 const tokenService = require("./token-service");
 const UserDto = require("../dtos/user-dto");
 const ApiError = require("../exceptions/api-error");
@@ -11,20 +10,20 @@ const {
   Stats,
   BotStats,
   Bot,
+  UserGame,
+  DominoUserGame,
 } = require("../models/db-models");
 
 class UserService {
   async registrationUser(username, name, email, password) {
     const candidateEmail = await User.findOne({ where: { email } });
     if (candidateEmail) {
-      throw ApiError.BadRequest(`Аккаунт с почтой ${email} уже существует`);
+      throw ApiError.BadRequest(`ERR_EMAIL_ALREADY_EXISTS`);
     }
 
     const candidateUsername = await User.findOne({ where: { username } });
     if (candidateUsername) {
-      throw ApiError.BadRequest(
-        `Аккаунт с никнеймом ${username} уже существует`
-      );
+      throw ApiError.BadRequest("ERR_USERNAME_ALREADY_EXISTS");
     }
     const hashPassword = await bcrypt.hash(password, 3);
 
@@ -91,18 +90,26 @@ class UserService {
     return user;
   }
 
-  async getLeaders(gameType) {
+  async getLeaders(gameType, userId) {
+    let user = await User.findOne({ where: { id: userId } });
     let allStats = await Stats.findAll({ include: User });
     const bots = await Bot.findAll();
+    const allUserGames = await UserGame.findAll();
 
     if (gameType == "loto") {
       //получаем всех юзеров з лото
       let lotoStats = [];
       allStats.forEach((user) => {
         if (user.gameLotoPlayed > 0) {
+          const userGames = allUserGames.filter(
+            (game) => game.userId == user.userId
+          );
+          const userWins = userGames.filter(
+            (game) => game.isWinner == true
+          ).length;
           let userDto = {
             username: user.user.username,
-            moneyWon: user.moneyLotoWon,
+            gamesWon: userWins,
             tokens: user.lotoTokens,
           };
           lotoStats.push(userDto);
@@ -112,12 +119,43 @@ class UserService {
         if (bot.lotoTokens > 0) {
           let botDto = {
             username: bot.username,
-            moneyWon: bot.moneyLotoWon,
+            gamesWon: bot.gameLotoWon,
             tokens: bot.lotoTokens,
           };
           lotoStats.push(botDto);
         }
       });
+
+      // проверка есть ли текущий человек в списке лидеров
+
+      let isUserInArr = false;
+      lotoStats.forEach((lotoUserStat) => {
+        if (lotoUserStat.username == user.username) {
+          isUserInArr = true;
+        }
+      });
+      if (isUserInArr == false) {
+        const userGames = allUserGames.filter(
+          (game) => game.userId == user.userId
+        );
+        const userWins = userGames.filter(
+          (game) => game.isWinner == true
+        ).length;
+        let lotoTokens = 0;
+        allStats.forEach((userStat) => {
+          if (userStat.username == user.username) {
+            lotoTokens = userStat.lotoTokens;
+          }
+        });
+        let userDto = {
+          username: user.username,
+          gamesWon: userWins,
+          tokens: lotoTokens,
+        };
+
+        lotoStats.push(userDto);
+      }
+
       return lotoStats;
     } else if (gameType == "nards") {
       //получаем всех юзеров з лото
@@ -144,26 +182,18 @@ class UserService {
       });
       return nardsStats;
     } else if (gameType == "domino") {
-      //получаем всех юзеров з лото
       let dominoStats = [];
+      const dominoUserGames = await DominoUserGame.findAll();
       allStats.forEach((user) => {
         if (user.gameDominoPlayed > 0) {
           let userDto = {
             username: user.user.username,
-            moneyWon: user.moneyDominoWon,
+            gamesWon: dominoUserGames.filter(
+              (game) => game.userId == user.userId && game.isWinner == true
+            ).length,
             tokens: user.dominoTokens,
           };
           dominoStats.push(userDto);
-        }
-      });
-      bots.forEach((bot) => {
-        if (bot.gameDominoPlayed > 0) {
-          let botDto = {
-            username: bot.username,
-            moneyWon: bot.moneyDominoWon,
-            tokens: bot.dominoTokens,
-          };
-          dominoStats.push(botDto);
         }
       });
       return dominoStats;

@@ -27,6 +27,8 @@ class LotoSettingsController {
         jackpot,
         maxCasksJackpot,
         canBotWinJackpot,
+        jackpotWinChance,
+        minJackpotSum,
       } = req.body;
       const gameLevel = req.params.id;
       if (
@@ -37,7 +39,9 @@ class LotoSettingsController {
           !winChance &&
           !jackpot &&
           !maxCasksJackpot &&
-          !canBotWinJackpot)
+          !canBotWinJackpot &&
+          !jackpotWinChance &&
+          !minJackpotSum)
       ) {
         return res
           .status(400)
@@ -52,6 +56,8 @@ class LotoSettingsController {
           winChance,
           maxCasksJackpot,
           canBotWinJackpot,
+          jackpotWinChance,
+          minJackpotSum,
         },
         { where: { gameLevel } }
       );

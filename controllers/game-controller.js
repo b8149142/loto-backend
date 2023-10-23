@@ -1,5 +1,12 @@
 const ApiError = require("../exceptions/api-error");
-const { Loto, User, LotoCard, LotoGame } = require("../models/db-models");
+const {
+  Loto,
+  User,
+  LotoCard,
+  LotoGame,
+  DominoGame,
+  DominoGamePlayer,
+} = require("../models/db-models");
 const gameService = require("../service/game-service");
 
 const events = require("events");
@@ -451,6 +458,62 @@ class GameController {
     // emitter.on("online", async (message) => {
     //   res.write(`data: ${JSON.stringify(message)} \n\n`);
     // });
+  }
+
+  async getDominoStatus(req, res) {
+    try {
+      const userId = req.user.id;
+
+      const player = await DominoGamePlayer.findOne({
+        where: { userId },
+        include: DominoGame,
+      });
+
+      if (player && player.dominoGame) {
+        console.log(player);
+        return res.status(200).json({
+          message: true,
+          roomInfo: {
+            roomId: player.dominoGame.roomId,
+            tableId: player.dominoGame.tableId,
+            playerMode: player.dominoGame.playerMode,
+            gameMode: player.dominoGame.gameMode,
+          },
+        });
+      }
+
+      return res.status(200).json({ message: false });
+    } catch (e) {
+      console.log(e);
+    }
+  }
+
+  async isDominoStarted(req, res) {
+    try {
+      const userId = req.user.id;
+      let { roomId, tableId, playerMode, gameMode } = req.body;
+
+      const dominoGame = await DominoGame.findOne({
+        where: {
+          roomId: roomId,
+          tableId: tableId,
+          playerMode: playerMode,
+          gameMode: gameMode,
+        },
+        include: DominoGamePlayer,
+      });
+
+      if (
+        dominoGame.startedAt != null &&
+        !dominoGame.dominoGamePlayers.find((player) => player.userId === userId)
+      ) {
+        return res.status(200).json({ allow: false });
+      }
+
+      return res.status(200).json({ allow: true });
+    } catch (e) {
+      console.log(e);
+    }
   }
 }
 

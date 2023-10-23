@@ -6,9 +6,6 @@
   "scripts": {
     "start": "nodemon index.js"
   },
-  "engines": {
-    "node": ">=14 <15"
-  },
   "keywords": [],
   "author": "",
   "license": "ISC",
@@ -22,6 +19,7 @@
     "express-validator": "^6.11.1",
     "express-ws": "^5.0.2",
     "jsonwebtoken": "^8.5.1",
+    "moment-timezone": "^0.5.43",
     "mongodb": "^3.6.8",
     "mongoose": "^5.12.11",
     "mysql2": "^3.5.2",
