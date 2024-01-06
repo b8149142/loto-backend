@@ -123,12 +123,25 @@ class dominoWsNavService {
               );
               return;
             }
+
+            ws.send(
+              JSON.stringify({
+                method: "123412",
+              })
+            );
+
             await dominoGameService.sendAllTableInfo(
               ws,
               msg.dominoRoomId,
               msg.tableId,
               msg.playerMode,
               msg.gameMode
+            );
+
+            ws.send(
+              JSON.stringify({
+                method: "fdsjkl;fas;ldfjkladsjfkl;sadjfl;ksadfjkl;sad",
+              })
             );
 
             return;
