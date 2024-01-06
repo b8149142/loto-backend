@@ -32,8 +32,192 @@ class dominoNavService {
     });
   }
 
- async dominoRoomConnectionHandler(ws, aWss, msg, startTurn) {
-     aWss.clients.forEach((user) => {
+  // async dominoRoomConnectionHandler(ws, aWss, msg, startTurn) {
+  //   aWss.clients.forEach((user) => {
+  //     if (
+  //       user.playerMode == msg.playerMode &&
+  //       user.dominoRoomId == msg.dominoRoomId &&
+  //       user.tableId == msg.tableId &&
+  //       user.userId == msg.userId &&
+  //       user.username == msg.username
+  //     ) {
+  //       // const response = {
+  //       //   method: "dominoRoomIsGoing",
+  //       // };
+  //       const response = {
+  //         method: "alreadyInRoom",
+  //       };
+
+  //       ws.send(JSON.stringify(response));
+  //       return;
+  //     }
+  //   });
+
+  //   ws.playerMode = msg.playerMode;
+  //   ws.dominoRoomId = msg.dominoRoomId;
+  //   ws.tableId = msg.tableId;
+  //   ws.userId = msg.userId;
+  //   ws.username = msg.username;
+  //   ws.gameMode = msg.gameMode;
+  //   ws.connectionDate = new Date().getTime();
+
+  //   // get room online
+  //   let online = this.getTableOnline(
+  //     aWss,
+  //     msg.dominoRoomId,
+  //     msg.tableId,
+  //     msg.playerMode,
+  //     msg.gameMode
+  //   );
+
+  //   let tableData = await DominoGame.findOne({
+  //     where: {
+  //       roomId: msg.dominoRoomId,
+  //       tableId: msg.tableId,
+  //       playerMode: msg.playerMode,
+  //       gameMode: msg.gameMode,
+  //     },
+  //   });
+
+  //   if (tableData.isAvailable == false && !tableData.isStarted) {
+  //     const response = {
+  //       method: "roomIsNotAvailable",
+  //     };
+  //     ws.send(JSON.stringify(response));
+  //     ws.playerMode = null;
+  //     ws.dominoRoomId = null;
+  //     ws.tableId = null;
+  //     ws.gameMode = null;
+  //     ws.connectionDate = null;
+  //     return;
+  //   }
+
+  //   if (online > msg.playerMode) {
+  //     const response = {
+  //       method: "dominoRoomIsGoing",
+  //     };
+  //     ws.send(JSON.stringify(response));
+  //     ws.playerMode = null;
+  //     ws.dominoRoomId = null;
+  //     ws.tableId = null;
+  //     ws.gameMode = null;
+  //     ws.connectionDate = null;
+  //     return;
+  //   }
+
+  //   // console.log("msg.dominoRoomId", msg.dominoRoomId);
+
+  //   // получаем время начала ожидания комнаты
+  //   let time = null;
+  //   if (online == 1 && !tableData.isStarted) {
+  //     let date = await axios.get(
+  //       "https://timeapi.io/api/Time/current/zone?timeZone=Europe/London",
+  //       {
+  //         headers: {
+  //           "Content-Type": "application/json",
+  //         },
+  //       }
+  //     );
+
+  //     time = new Date(date.data.dateTime).getTime();
+
+  //     await DominoGame.update(
+  //       {
+  //         startedWaitingAt: time,
+  //       },
+  //       {
+  //         where: {
+  //           roomId: msg.dominoRoomId,
+  //           tableId: msg.tableId,
+  //           playerMode: msg.playerMode,
+  //           gameMode: msg.gameMode,
+  //         },
+  //       }
+  //     );
+  //   }
+
+  //   tableData = await DominoGame.findOne({
+  //     where: {
+  //       roomId: msg.dominoRoomId,
+  //       tableId: msg.tableId,
+  //       playerMode: msg.playerMode,
+  //       gameMode: msg.gameMode,
+  //     },
+  //   });
+
+  //   const userIds = [];
+  //   aWss.clients.forEach((client) => {
+  //     if (
+  //       client.dominoRoomId == msg.dominoRoomId &&
+  //       client.tableId == msg.tableId &&
+  //       client.playerMode == msg.playerMode &&
+  //       client.gameMode == msg.gameMode
+  //     ) {
+  //       userIds.push(client.userId);
+  //     }
+  //   });
+
+  //   const users = await User.findAll({
+  //     where: {
+  //       id: userIds,
+  //     },
+  //   });
+
+  //   let players = users.map((user) => {
+  //     let connectionDate;
+  //     aWss.clients.forEach((client) => {
+  //       if (client.userId == user.id) {
+  //         connectionDate = client.connectionDate;
+  //       }
+  //     });
+  //     return {
+  //       userId: user.id,
+  //       username: user.username,
+  //       avatar: user.avatar,
+  //       connectionDate,
+  //     };
+  //   });
+
+  //   roomsFunctions.sendAll(aWss, "connectDomino", msg);
+
+  //   roomsFunctions.sendToClientsInTable(
+  //     aWss,
+  //     msg.dominoRoomId,
+  //     msg.tableId,
+  //     msg.playerMode,
+  //     msg.gameMode,
+  //     {
+  //       method: "waitingTableData",
+  //       online,
+  //       isStarted: tableData.isStarted,
+  //       startedAt: tableData.startedAt,
+  //       playerMode: msg.playerMode,
+  //       dominoRoomId: msg.dominoRoomId,
+  //       tableId: msg.tableId,
+  //       playerMode: msg.playerMode,
+  //       gameMode: msg.gameMode,
+  //       startedWaitingAt: tableData.startedWaitingAt,
+  //       players,
+  //     }
+  //   );
+
+  //   online = this.getTableOnline(
+  //     aWss,
+  //     msg.dominoRoomId,
+  //     msg.tableId,
+  //     msg.playerMode,
+  //     msg.gameMode
+  //   );
+  //   if (online == msg.playerMode && !tableData.isStarted) {
+  //     dominoGameService.startLobby(ws, aWss, msg, startTurn);
+  //   }
+
+  //   // await this.getAllDominoInfo(null, aWss);
+  // }
+
+  async dominoRoomConnectionHandler(ws, aWss, msg, startTurn) {
+    let alreadyInRoom = false;
+    aWss.clients.forEach((user) => {
       if (
         user.playerMode == msg.playerMode &&
         user.dominoRoomId == msg.dominoRoomId &&
@@ -41,23 +225,21 @@ class dominoNavService {
         user.userId == msg.userId &&
         user.username == msg.username
       ) {
+        // const response = {
+        //   method: "dominoRoomIsGoing",
+        // };
         const response = {
-          method: "dominoRoomIsGoing",
-        };
-        const response1 = {
           method: "alreadyInRoom",
         };
-
-        user.username = null;
-        user.userId = null;
-        user.tableId = null;
-        user.dominoRoomId = null;
-        user.playerMode = null;
-
-        ws.send(JSON.stringify(response1));
+        alreadyInRoom = true;
+        ws.send(JSON.stringify(response));
         return;
       }
     });
+
+    if (alreadyInRoom) {
+      return;
+    }
 
     ws.playerMode = msg.playerMode;
     ws.dominoRoomId = msg.dominoRoomId;
@@ -217,10 +399,7 @@ class dominoNavService {
     if (online == msg.playerMode && !tableData.isStarted) {
       dominoGameService.startLobby(ws, aWss, msg, startTurn);
     }
-
-    // await this.getAllDominoInfo(null, aWss);
   }
-
 
   async getAllDominoInfo(ws = null, aWss) {
     const clientsData = [];
