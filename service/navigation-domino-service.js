@@ -33,7 +33,7 @@ class dominoNavService {
   }
 
  async dominoRoomConnectionHandler(ws, aWss, msg, startTurn) {
-    aWss.clients.forEach((user) => {
+     aWss.clients.forEach((user) => {
       if (
         user.playerMode == msg.playerMode &&
         user.dominoRoomId == msg.dominoRoomId &&
@@ -47,6 +47,13 @@ class dominoNavService {
         const response1 = {
           method: "alreadyInRoom",
         };
+
+        user.username = null;
+        user.userId = null;
+        user.tableId = null;
+        user.dominoRoomId = null;
+        user.playerMode = null;
+
         ws.send(JSON.stringify(response1));
         return;
       }
