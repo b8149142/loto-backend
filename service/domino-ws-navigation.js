@@ -80,15 +80,6 @@ class dominoWsNavService {
             },
           });
 
-          if (user.balance < betInfo.bet) {
-            ws.send(
-              JSON.stringify({
-                method: "notEnoughBalance",
-              })
-            );
-            return;
-          }
-
           // check if game is started and user is not in game
           if (
             dominoGame.startedAt != null &&
@@ -103,12 +94,14 @@ class dominoWsNavService {
             return;
           }
 
-          await dominoNavService.dominoRoomConnectionHandler(
-            ws,
-            aWss,
-            msg,
-            this.startTurn
-          );
+          if (user.balance < betInfo.bet) {
+            ws.send(
+              JSON.stringify({
+                method: "notEnoughBalance",
+              })
+            );
+            return;
+          }
 
           // check if user is in game and send him all info
           if (
@@ -128,7 +121,6 @@ class dominoWsNavService {
                 msg.gameMode,
                 message
               );
-
               return;
             }
             await dominoGameService.sendAllTableInfo(
@@ -138,7 +130,16 @@ class dominoWsNavService {
               msg.playerMode,
               msg.gameMode
             );
+
+            return;
           }
+
+          await dominoNavService.dominoRoomConnectionHandler(
+            ws,
+            aWss,
+            msg,
+            this.startTurn
+          );
 
           break;
 
