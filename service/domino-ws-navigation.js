@@ -51,6 +51,7 @@ class dominoWsNavService {
 
       switch (msg.method) {
         case "connectDomino":
+          console.log(msg);
           const dominoGame = await DominoGame.findOne({
             where: {
               roomId: msg.dominoRoomId,
