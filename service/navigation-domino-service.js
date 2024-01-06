@@ -48,6 +48,14 @@ class dominoNavService {
           method: "alreadyInRoom",
         };
 
+        user.playerMode = null;
+        user.dominoRoomId = null;
+        user.tableId = null;
+        user.userId = null;
+        user.username = null;
+        user.gameMode = null;
+
+
         ws.send(JSON.stringify(response));
         return;
       }
