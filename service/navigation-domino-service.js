@@ -32,7 +32,7 @@ class dominoNavService {
     });
   }
 
-  async dominoRoomConnectionHandler(ws, aWss, msg, startTurn) {
+ async dominoRoomConnectionHandler(ws, aWss, msg, startTurn) {
     aWss.clients.forEach((user) => {
       if (
         user.playerMode == msg.playerMode &&
@@ -44,7 +44,10 @@ class dominoNavService {
         const response = {
           method: "dominoRoomIsGoing",
         };
-        ws.send(JSON.stringify(response));
+        const response1 = {
+          method: "alreadyInRoom",
+        };
+        ws.send(JSON.stringify(response1));
         return;
       }
     });
@@ -210,6 +213,7 @@ class dominoNavService {
 
     // await this.getAllDominoInfo(null, aWss);
   }
+
 
   async getAllDominoInfo(ws = null, aWss) {
     const clientsData = [];
