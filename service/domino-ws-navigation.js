@@ -80,37 +80,6 @@ class dominoWsNavService {
             },
           });
 
-          // check if user is in game and send him all info
-          if (
-            dominoGame.dominoGamePlayers.find(
-              (player) => player.userId == msg.userId
-            )
-          ) {
-            if (dominoGame.isFinished == true) {
-              let message = {
-                method: "reconnectEndedDominoGame",
-              };
-              roomsFunctions.sendToClientsInTable(
-                aWss,
-                msg.dominoRoomId,
-                msg.tableId,
-                msg.playerMode,
-                msg.gameMode,
-                message
-              );
-              return;
-            }
-            await dominoGameService.sendAllTableInfo(
-              ws,
-              msg.dominoRoomId,
-              msg.tableId,
-              msg.playerMode,
-              msg.gameMode
-            );
-            return;
-          }
-
-          // check user balance
           if (user.balance < betInfo.bet) {
             ws.send(
               JSON.stringify({
@@ -140,6 +109,36 @@ class dominoWsNavService {
             msg,
             this.startTurn
           );
+
+          // check if user is in game and send him all info
+          if (
+            dominoGame.dominoGamePlayers.find(
+              (player) => player.userId === msg.userId
+            )
+          ) {
+            if (dominoGame.isFinished == true) {
+              let message = {
+                method: "reconnectEndedDominoGame",
+              };
+              roomsFunctions.sendToClientsInTable(
+                aWss,
+                msg.dominoRoomId,
+                msg.tableId,
+                msg.playerMode,
+                msg.gameMode,
+                message
+              );
+
+              return;
+            }
+            await dominoGameService.sendAllTableInfo(
+              ws,
+              msg.dominoRoomId,
+              msg.tableId,
+              msg.playerMode,
+              msg.gameMode
+            );
+          }
 
           break;
 
