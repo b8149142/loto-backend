@@ -94,7 +94,12 @@ class dominoWsNavService {
             return;
           }
 
-          if (user.balance < betInfo.bet) {
+          if (
+            !dominoGame.dominoGamePlayers.find(
+              (player) => player.userId == msg.userId
+            ) &&
+            user.balance < betInfo.bet
+          ) {
             ws.send(
               JSON.stringify({
                 method: "notEnoughBalance",
@@ -103,10 +108,17 @@ class dominoWsNavService {
             return;
           }
 
+          await dominoNavService.dominoRoomConnectionHandler(
+            ws,
+            aWss,
+            msg,
+            this.startTurn
+          );
+
           // check if user is in game and send him all info
           if (
             dominoGame.dominoGamePlayers.find(
-              (player) => player.userId === msg.userId
+              (player) => player.userId == msg.userId
             )
           ) {
             if (dominoGame.isFinished == true) {
@@ -124,12 +136,6 @@ class dominoWsNavService {
               return;
             }
 
-            ws.send(
-              JSON.stringify({
-                method: "123412",
-              })
-            );
-
             await dominoGameService.sendAllTableInfo(
               ws,
               msg.dominoRoomId,
@@ -138,21 +144,8 @@ class dominoWsNavService {
               msg.gameMode
             );
 
-            ws.send(
-              JSON.stringify({
-                method: "fdsjkl;fas;ldfjkladsjfkl;sadjfl;ksadfjkl;sad",
-              })
-            );
-
             return;
           }
-
-          await dominoNavService.dominoRoomConnectionHandler(
-            ws,
-            aWss,
-            msg,
-            this.startTurn
-          );
 
           break;
 
