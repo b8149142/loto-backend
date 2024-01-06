@@ -1,6 +1,8 @@
 const userService = require("../service/user-service");
 const { validationResult } = require("express-validator");
 const ApiError = require("../exceptions/api-error");
+const path = require("path");
+const fs = require("fs");
 const {
   User,
   BotStats,
@@ -11,8 +13,12 @@ const {
   Deposit,
   PlayedGame,
   DominoUserGame,
+  Page,
+  LotoGame,
+  DominoGame,
 } = require("../models/db-models");
 const tokenService = require("../service/token-service");
+const Uuid = require("uuid");
 
 class UserController {
   async registration(req, res, next) {
@@ -47,6 +53,54 @@ class UserController {
         httpOnly: true,
       });
       return res.json(userData);
+    } catch (e) {
+      next(e);
+    }
+  }
+
+  async uploadAvatar(req, res, next) {
+    try {
+      let user = await User.findOne({ where: { id: req.user.id } });
+      if (!user) {
+        throw ApiError.BadRequest("User not found");
+      }
+      if (user.avatar != null) {
+        try {
+          fs.unlinkSync(
+            `${path.resolve(__dirname, "..", "static", "avatars", user.avatar)}`
+          );
+        } catch (error) {
+          console.log("file not found");
+        }
+      }
+      const file = req.files.file;
+      let imageMimeType =
+        file.mimetype.split("/")[file.mimetype.split("/").length - 1];
+      const avatarName = Uuid.v4() + "." + imageMimeType;
+      file.mv(
+        `${path.resolve(__dirname, "..", "static", "avatars", avatarName)}`
+      );
+      await User.update({ avatar: avatarName }, { where: { id: user.id } });
+      user = await User.findOne({ where: { id: user.id } });
+      return res.json(user);
+    } catch (e) {
+      console.log(e);
+      next(e);
+    }
+  }
+
+  async deleteAvatar(req, res, next) {
+    try {
+      let user = await User.findOne({ where: { id: req.user.id } });
+      if (!user) {
+        throw ApiError.BadRequest("User not found");
+      }
+      fs.unlinkSync(
+        `${path.resolve(__dirname, "..", "static", "avatars", user.avatar)}`
+      );
+      await User.update({ avatar: null }, { where: { id: user.id } });
+      user = await User.findOne({ where: { id: user.id } });
+      return res.json(user);
     } catch (e) {
       next(e);
     }
@@ -94,6 +148,9 @@ class UserController {
   async checkAuth(req, res, next) {
     try {
       const user = await userService.checkAuth(req, res, next);
+      if (!user) {
+        throw ApiError.BadRequest("user not found");
+      }
       return res.json(user);
     } catch (e) {
       next(e);
@@ -146,7 +203,7 @@ class UserController {
       const userId = req.user.id;
       const lotoGames = await UserGame.findAll({ where: { userId } });
       const dominoGames = await DominoUserGame.findAll({ where: { userId } });
-      return res.json({lotoGames, dominoGames});
+      return res.json({ lotoGames, dominoGames });
     } catch (e) {
       next(e);
     }
@@ -223,7 +280,7 @@ class UserController {
         { balance: user.balance + sum },
         { where: { id: userId } }
       );
-      await Deposit.create({ depositAmount: sum, userId });
+      await Deposit.create({ depositAmount: sum, userId: userId });
       const stats = await Stats.findOne({ where: { userId } });
       await stats.update({ deposited: stats.deposited + sum });
       return res.status(200).json({ balance: user.balance + sum });
@@ -314,6 +371,16 @@ class UserController {
     }
   }
 
+  async getPlayedDominoGames(req, res, next) {
+    try {
+      const playedGames = await DominoUserGame.findAll();
+      return res.status(200).json(playedGames);
+    } catch (e) {
+      console.log(e);
+      next(e);
+    }
+  }
+
   async changeUserData(req, res, next) {
     try {
       const userId = req.user.id;
@@ -337,6 +404,152 @@ class UserController {
       });
     } catch (e) {
       console.log(e);
+      next(e);
+    }
+  }
+
+  async isPageAvailable(req, res, next) {
+    try {
+      const { page } = req.params;
+      const pageData = await Page.findOne({ where: { page } });
+      if (!pageData) {
+        throw ApiError.BadRequest("Error while finding pages");
+      }
+      return res.json({ isAvailable: pageData.isAvailable });
+    } catch (e) {
+      console.log(e);
+      next(e);
+    }
+  }
+
+  async getRoomsControl(req, res, next) {
+    try {
+      const roomsControl = {
+        loto: false,
+        dominoClassic: false,
+        dominoTelephone: false,
+        lotoRooms: [],
+        dominoClassicRooms: [],
+        dominoTelephoneRooms: [],
+      };
+      const pages = await Page.findAll();
+      pages.forEach((page) => {
+        roomsControl[page.page] = page.isAvailable;
+      });
+
+      const lotoRooms = await LotoGame.findAll();
+      const dominoClassicRooms = await DominoGame.findAll({
+        where: { gameMode: "CLASSIC" },
+      });
+      const dominoTelephoneRooms = await DominoGame.findAll({
+        where: { gameMode: "TELEPHONE" },
+      });
+
+      lotoRooms.forEach((room) => {
+        roomsControl.lotoRooms.push({
+          roomId: room.gameLevel,
+          isAvailable: room.isAvailable,
+        });
+      });
+
+      dominoClassicRooms.forEach((room) => {
+        if (
+          !roomsControl.dominoClassicRooms.find((r) => r.roomId == room.roomId)
+        ) {
+          roomsControl.dominoClassicRooms.push({
+            roomId: room.roomId,
+            isAvailable: room.isAvailable,
+          });
+        }
+      });
+
+      dominoTelephoneRooms.forEach((room) => {
+        if (
+          !roomsControl.dominoTelephoneRooms.find((r) => {
+            return r.roomId == room.roomId;
+          })
+        ) {
+          roomsControl.dominoTelephoneRooms.push({
+            roomId: room.roomId,
+            isAvailable: room.isAvailable,
+          });
+        }
+      });
+
+      return res.json(roomsControl);
+    } catch (e) {
+      console.log(e);
+      next(e);
+    }
+  }
+
+  async updateRoomsControl(req, res, next) {
+    // const roomsControl = {
+    //   loto: false,
+    //   lotoRooms: [],
+    // };
+    // const roomsControl = {
+    //   dominoClassic: false,
+    //   dominoClassicRooms: [],
+    // };
+    // const roomsControl = {
+    //   dominoTelephone: false,
+    //   dominoTelephoneRooms: [],
+    // };
+
+    const { mode } = req.params;
+    const roomsControl = req.body;
+
+    try {
+      if (mode == "loto") {
+        const lotoRooms = await LotoGame.findAll();
+        lotoRooms.forEach(async (room) => {
+          await room.update({
+            isAvailable: roomsControl.lotoRooms.find(
+              (r) => r.roomId == room.gameLevel
+            ).isAvailable,
+          });
+        });
+        await Page.update(
+          { isAvailable: roomsControl.loto },
+          { where: { page: "loto" } }
+        );
+      } else if (mode == "domino-classic") {
+        const dominoClassicRooms = await DominoGame.findAll({
+          where: { gameMode: "CLASSIC" },
+        });
+
+        dominoClassicRooms.forEach(async (room) => {
+          await room.update({
+            isAvailable: roomsControl.dominoClassicRooms.find(
+              (r) => r.roomId == room.roomId
+            ).isAvailable,
+          });
+        });
+        await Page.update(
+          { isAvailable: roomsControl.dominoClassic },
+          { where: { page: "dominoClassic" } }
+        );
+      } else if (mode == "domino-telephone") {
+        const dominoTelephoneRooms = await DominoGame.findAll({
+          where: { gameMode: "TELEPHONE" },
+        });
+        dominoTelephoneRooms.forEach(async (room) => {
+          await room.update({
+            isAvailable: roomsControl.dominoTelephoneRooms.find(
+              (r) => r.roomId == room.roomId
+            ).isAvailable,
+          });
+        });
+        await Page.update(
+          { isAvailable: roomsControl.dominoTelephone },
+          { where: { page: "dominoTelephone" } }
+        );
+      }
+      return res.json(roomsControl);
+    } catch (e) {
+      console.log(e);
+      throw ApiError.BadRequest("Error while updating rooms control");
       next(e);
     }
   }

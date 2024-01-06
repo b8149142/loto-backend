@@ -46,12 +46,11 @@ class dominoWsNavService {
     ws.on("message", async (msg) => {
       msg = JSON.parse(msg);
 
-      console.log(msg);
-      console.log(msg?.gameMode);
+      // console.log(msg);
+      // console.log(msg?.gameMode);
 
       switch (msg.method) {
         case "connectDomino":
-          console.log(msg);
           const dominoGame = await DominoGame.findOne({
             where: {
               roomId: msg.dominoRoomId,
@@ -62,7 +61,14 @@ class dominoWsNavService {
             include: DominoGamePlayer,
           });
 
-          // console.log(dominoGame);
+          if (!dominoGame) {
+            ws.send(
+              JSON.stringify({
+                method: "invalidRoom",
+              })
+            );
+            return;
+          }
 
           const betInfo = dominoGameService.getDominoRoomBetInfo(
             msg.dominoRoomId
@@ -90,11 +96,10 @@ class dominoWsNavService {
               (player) => player.userId === msg.userId
             )
           ) {
-            // ws.send(
-            //   JSON.stringify({
-            //     method: "notEnoughBalance",
-            //   })
-            // );
+            const response = {
+              method: "dominoRoomIsGoing",
+            };
+            ws.send(JSON.stringify(response));
             return;
           }
 
@@ -137,16 +142,23 @@ class dominoWsNavService {
 
           break;
 
+        case "isDominoStarted":
+          await dominoNavService.isDominoStarted(ws, msg);
+          break;
+
         case "getAllDominoInfo":
           await dominoNavService.getAllDominoInfo(ws, aWss);
+
           break;
 
         case "leaveDominoTable":
+          // console.log(msg);
+
           await dominoNavService.removeUserFromTable(aWss, msg);
           break;
 
         case "playDominoTurn":
-          console.log(msg);
+          // console.log(msg);
           const isPlaced = await dominoGameService.placeTile(ws, aWss, msg);
           if (isPlaced) {
             await dominoGameService.sendNewScene(
@@ -237,7 +249,8 @@ class dominoWsNavService {
     currentTurn = null,
     turnTime = null,
     handleTurn = null,
-    skipedTurn = false
+    skipedTurn = false,
+    autoTurn = false
   ) => {
     removeTimeout(roomId, tableId, players, gameMode);
 
@@ -258,6 +271,7 @@ class dominoWsNavService {
       await DominoGame.update(
         {
           turn: currentTurn,
+          turnTime: turnTime,
         },
         {
           where: {
@@ -298,6 +312,10 @@ class dominoWsNavService {
         turnTime: turnTime,
       });
 
+      const playersTiles = dominoGame.dominoGamePlayers.map((player) => {
+        return { userId: player.userId, tiles: JSON.parse(player.tiles) };
+      });
+
       roomsFunctions.sendToClientsInTable(
         aWss,
         roomId,
@@ -306,10 +324,16 @@ class dominoWsNavService {
         gameMode,
         {
           method: "newDominoTurn",
+          dominoRoomId: roomId,
+          tableId,
+          playerMode: players,
+          gameMode,
           currentTurn: nexTurn,
           turnTime: turnTime,
           pastTurn: turn,
+          playersTiles,
           skipedTurn: { skipedTurn: skipedTurn, playerId: turn },
+          autoTurn: { autoTurn: autoTurn, playerId: turn },
           scene: JSON.parse(dominoGame.scene),
         }
       );
@@ -373,7 +397,12 @@ class dominoWsNavService {
         include: DominoGamePlayer,
       });
 
-      skipedTurn = true;
+      const playersTiles = dominoGame.dominoGamePlayers.map((player) => {
+        return { userId: player.userId, tiles: JSON.parse(player.tiles) };
+      });
+
+      skipedTurn = false;
+      autoTurn = true;
       roomsFunctions.sendToClientsInTable(
         aWss,
         roomId,
@@ -382,10 +411,16 @@ class dominoWsNavService {
         gameMode,
         {
           method: "newDominoTurn",
+          dominoRoomId: roomId,
+          tableId,
+          playerMode: players,
+          gameMode,
           currentTurn: nexTurn,
           turnTime: turnTime,
           pastTurn: turn,
+          playersTiles,
           skipedTurn: { skipedTurn: skipedTurn, playerId: turn },
+          autoTurn: { autoTurn: autoTurn, playerId: turn },
           scene: JSON.parse(dominoGame.scene),
         }
       );

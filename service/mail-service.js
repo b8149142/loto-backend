@@ -17,15 +17,14 @@ class MailService {
     await this.transporter.sendMail({
       from: process.env.SMTP_USER,
       to,
-      subject: "Baskom",
+      subject: "LuxuryGames",
       text: "",
       html: `
-                    <div>
-                        <h1>Активація аккаунту на Baskom</h1>
-                        <h2>Ваш код для активації: <b> ${code}</b> </h2>
-                    
-                    </div>
-                `,
+        <div>
+            <h1>activate accaunt 24loto.com</h1>
+            <h2>code: <b> ${code}</b> </h2>
+        </div>
+      `,
     });
   }
 }

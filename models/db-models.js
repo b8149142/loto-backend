@@ -13,12 +13,14 @@ const User = sequelize.define("user", {
   password: { type: DataTypes.STRING, unique: true, allowNull: false },
   name: { type: DataTypes.STRING, allowNull: false },
   username: { type: DataTypes.STRING, allowNull: false },
+  avatar: { type: DataTypes.STRING, defaultValue: null },
   isAdmin: { type: DataTypes.BOOLEAN, defaultValue: false },
+  seeDominoClassic: { type: DataTypes.BOOLEAN, defaultValue: false },
+  seeDominoTelephone: { type: DataTypes.BOOLEAN, defaultValue: false },
   balance: { type: DataTypes.FLOAT, defaultValue: 0 },
   wins: { type: DataTypes.INTEGER, defaultValue: 0 },
   losses: { type: DataTypes.INTEGER, defaultValue: 0 },
 });
-
 const Stats = sequelize.define("stat", {
   id: {
     type: DataTypes.INTEGER,
@@ -124,6 +126,7 @@ const LotoGame = sequelize.define("lotoGame", {
   botsTickets: { type: DataTypes.JSON, defaultValue: "[]" },
   prevBank: { type: DataTypes.FLOAT, defaultValue: 0 },
   jackpot: { type: DataTypes.FLOAT, defaultValue: 0 },
+  isAvailable: { type: DataTypes.BOOLEAN, defaultValue: true },
 });
 
 const UserGame = sequelize.define("usergame", {
@@ -220,6 +223,10 @@ const PlayedGame = sequelize.define("playedgame", {
     unique: true,
     allowNull: false,
   },
+  roomId: { type: DataTypes.INTEGER, allowNull: false },
+  lotoBotTickets: {
+    type: DataTypes.INTEGER,
+  },
 });
 
 const DominoGame = sequelize.define("dominoGame", {
@@ -231,6 +238,7 @@ const DominoGame = sequelize.define("dominoGame", {
     allowNull: false,
   },
   startedAt: { type: DataTypes.DATE },
+  startedWaitingAt: { type: DataTypes.DATE },
   isStarted: { type: DataTypes.BOOLEAN, defaultValue: false },
   isFinished: { type: DataTypes.BOOLEAN, defaultValue: false },
   roomId: { type: DataTypes.INTEGER, allowNull: false },
@@ -243,6 +251,7 @@ const DominoGame = sequelize.define("dominoGame", {
   turnQueue: { type: DataTypes.JSON, defaultValue: "[]" },
   scene: { type: DataTypes.JSON, defaultValue: "[]" },
   market: { type: DataTypes.JSON, defaultValue: "[]" },
+  isAvailable: { type: DataTypes.BOOLEAN, defaultValue: true },
 });
 
 const DominoGamePlayer = sequelize.define("dominoGamePlayer", {
@@ -272,6 +281,18 @@ const DominoUserGame = sequelize.define("dominoUserGame", {
   tableId: { type: DataTypes.INTEGER, allowNull: false },
   playerMode: { type: DataTypes.INTEGER, allowNull: false },
   gameMode: { type: DataTypes.STRING, allowNull: false },
+});
+
+const Page = sequelize.define("page", {
+  id: {
+    type: DataTypes.INTEGER,
+    autoIncrement: true,
+    primaryKey: true,
+    unique: true,
+    allowNull: false,
+  },
+  page: { type: DataTypes.STRING, allowNull: false },
+  isAvailable: { type: DataTypes.BOOLEAN, defaultValue: true },
 });
 
 DominoGame.hasMany(DominoGamePlayer);
@@ -321,4 +342,5 @@ module.exports = {
   DominoGame,
   DominoGamePlayer,
   DominoUserGame,
+  Page,
 };

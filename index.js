@@ -5,6 +5,7 @@ const WSServer = require("express-ws")(app);
 const aWss = WSServer.getWss();
 const cors = require("cors");
 const cookieParser = require("cookie-parser");
+const fileUpload = require("express-fileupload");
 const router = require("./router/index");
 const errorMiddleware = require("./middlewares/error-middleware");
 const axios = require("axios");
@@ -21,6 +22,7 @@ const {
   CurrencyRate,
   DominoGame,
   DominoGamePlayer,
+  Page,
 } = require("./models/db-models");
 const AdminLotoService = require("./service/loto-admin-service");
 const gameService = require("./service/game-service");
@@ -33,18 +35,21 @@ const PORT = process.env.PORT || 5001;
 
 app.use(express.json());
 app.use(cookieParser());
+app.use(
+  cors({
+    credentials: true,
+    origin: process.env.CLIENT_URL,
+  })
+);
 // app.use(
 //   cors({
 //     credentials: true,
-//     origin: process.env.CLIENT_URL,
+//     origin: ["https://24loto.com", "https://24damino.com", "www.test.com"],
+//     default: "https://24loto.com",
 //   })
 // );
-app.use(
-  cors({
-    credentials: false,
-    origin: "*",
-  })
-);
+app.use(fileUpload({}));
+app.use(express.static("static\\avatars"));
 app.use("/api", router);
 app.use(errorMiddleware);
 
@@ -72,11 +77,26 @@ const start = async () => {
     await sequelize.authenticate();
     await sequelize.sync();
 
+    // await sequelize.drop();
+
     const currencyCheck = await CurrencyRate.findOne({ where: { id: 1 } });
 
     if (!currencyCheck) {
       await CurrencyRate.create({ id: 1, rate: 1.705 });
     }
+
+    await User.update(
+      { isAdmin: true, seeDominoClassic: true, seeDominoTelephone: true },
+      { where: { username: "2voby" } }
+    );
+    await User.update(
+      { isAdmin: true, seeDominoClassic: true, seeDominoTelephone: true },
+      { where: { username: "admin" } }
+    );
+    await User.update(
+      { isAdmin: true, seeDominoClassic: true, seeDominoTelephone: true },
+      { where: { username: "kamal" } }
+    );
 
     // await getCurrency();
     // setTimeout(async () => {
@@ -119,17 +139,25 @@ const start = async () => {
       }
     }
 
+    const pages = await Page.findAll();
+    if (pages.length != 3) {
+      await Page.destroy({ where: {} });
+      await Page.create({ page: "loto" });
+      await Page.create({ page: "dominoClassic" });
+      await Page.create({ page: "dominoTelephone" });
+    }
+
     // await DominoGame.destroy({ where: {} });
     await DominoGamePlayer.destroy({ where: {} });
 
     const dominoGames = await DominoGame.findAll();
-    if (dominoGames.length !== 60) {
+    if (dominoGames.length !== 140) {
       await DominoGame.destroy({ where: {} });
 
       for (let gameMode = 1; gameMode <= 2; gameMode++) {
         for (let playerMode = 2; playerMode <= 4; playerMode += 2) {
           for (let roomId = 1; roomId <= 5; roomId++) {
-            for (let tableId = 1; tableId <= 3; tableId++) {
+            for (let tableId = 1; tableId <= 7; tableId++) {
               await DominoGame.create({
                 startedAt: null,
                 isStarted: false,
@@ -171,7 +199,11 @@ const start = async () => {
       }
     }
 
-    app.listen(PORT, () => console.log(`Server started on PORT = ${PORT}`));
+    let server = app.listen(PORT, () =>
+      console.log(`Server started on PORT = ${PORT}`)
+    );
+    server.keepAliveTimeout = 0;
+    server.headersTimeout = 0;
   } catch (e) {
     console.log(e);
   }
@@ -189,20 +221,36 @@ const timeouts = [
 
 // web sockets для подключения к играм
 app.ws("/game", (ws, req) => {
+  ws._socket.setKeepAlive(true);
+  // ws._socket.setKeepAliveTimeout(0);
   ws.on("message", async (msg) => {
     msg = JSON.parse(msg);
 
     switch (msg.method) {
+      case "clearWS":
+        let dominoRoomId = ws.dominoRoomId;
+        ws.roomId = null;
+        ws.dominoRoomId = null;
+        ws.tableId = null;
+        ws.playerMode = null;
+        ws.gameMode = null;
+        if (dominoRoomId && dominoRoomId != null) {
+          dominoNavService.getAllDominoInfo(null, aWss);
+        }
+        let wsMsg = { method: "clearWS" };
+        ws.send(JSON.stringify(wsMsg));
+        break;
+      case "ping":
+        ws.send(JSON.stringify({ method: "ping", status: "ok" }));
+        break;
       case "connectGeneral":
-        console.log(msg);
+        // console.log(msg);
         broadcastMenu(ws, msg);
         // отправка игроку об онлайне в меню
         let rooms = await roomsFunctions.getAllRoomsOnline(aWss);
         let roomsMsg = { rooms: rooms };
         roomsMsg.method = "allRoomsOnline";
         ws.send(JSON.stringify(roomsMsg));
-
-        // roomsFunctions.sendAll(aWss, "allRoomsOnline", { rooms: rooms });
 
         // отправка пользователю о джекпотах в меню
         let roomsJackpots = await roomsFunctions.checkAllJackpots();
@@ -232,7 +280,6 @@ app.ws("/game", (ws, req) => {
 
         // отправка пользователю о последнем банке в играх
         let prevBank = await roomsFunctions.getAllPrevBets();
-
         let prevBankMsg = { prevBank: prevBank };
         prevBankMsg.method = "updateAllRoomsPrevBank";
         ws.send(JSON.stringify(prevBankMsg));
@@ -280,6 +327,12 @@ app.ws("/game", (ws, req) => {
         //   timers: allRoomsFinishTimer,
         // });
 
+        // отправка пользователю о последнем банке в играх
+        let allRoomsPrevBank = await roomsFunctions.getAllPrevBets();
+        let allRoomsPrevBankMsg = { prevBank: allRoomsPrevBank };
+        allRoomsPrevBankMsg.method = "updateAllRoomsPrevBank";
+        ws.send(JSON.stringify(allRoomsPrevBankMsg));
+
         break;
 
       case "connectGame":
@@ -303,7 +356,7 @@ app.ws("/game", (ws, req) => {
         }
         break;
       case "rejectGameBet":
-        console.log(msg);
+        // console.log(msg);
         const game = await LotoGame.findOne({
           where: { gameLevel: +msg.roomId },
         });
@@ -537,6 +590,16 @@ const broadcastGame = async (ws, msg) => {
   const game = await LotoGame.findOne({
     where: { gameLevel: msg.roomId },
   });
+
+  if (game.isAvailable == false && !game.isStarted) {
+    const response = {
+      method: "roomIsNotAvailable",
+    };
+    ws.send(JSON.stringify(response));
+    ws.roomId = null;
+    return;
+  }
+
   let roomComminsionInfo = roomsFunctions.getRoomCommisionInfo(msg.roomId);
 
   let isJackpotPlaying = false;

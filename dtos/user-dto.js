@@ -10,5 +10,8 @@ module.exports = class UserDto {
     this.username = model.username;
     this.balance = model.balance;
     this.isAdmin = model.isAdmin;
+    this.avatar = model.avatar;
+    this.seeDominoClassic = model.seeDominoClassic;
+    this.seeDominoTelephone = model.seeDominoTelephone;
   }
 };

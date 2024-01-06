@@ -107,7 +107,17 @@ class GameService {
       }
 
       // записываем игру в историю игр
-      const { id: playedgameId } = await PlayedGame.create({});
+      let botsTicketsNum = 0;
+      let botsTicketsArr = JSON.parse(game.botsTickets);
+
+      botsTicketsArr.forEach((ticket) => {
+        botsTicketsNum += Number(ticket);
+      });
+
+      const { id: playedgameId } = await PlayedGame.create({
+        roomId: msg.roomId,
+        lotoBotTickets: botsTicketsNum,
+      });
 
       // получаем настройки комнаты и шансы бота на выиграш
       const settings = await LotoSetting.findOne({
@@ -264,7 +274,7 @@ class GameService {
         }
       );
       const time = new Date(date.data.dateTime).getTime();
-      console.log(time);
+      // // console.log(time);
       await LotoGame.update(
         {
           finishesAt: time,
@@ -303,13 +313,6 @@ class GameService {
       // отправляем сообщение о начале игры на сервер
       await getAllRoomsFinishTimers(aWss);
 
-      let botsTicketsNum = 0;
-      let botsTicketsArr = JSON.parse(game.botsTickets);
-
-      botsTicketsArr.forEach((ticket) => {
-        botsTicketsNum += Number(ticket);
-      });
-
       for (const client of aWss.clients) {
         if (client.roomId == msg.roomId) {
           let openGameMsg = {
@@ -338,7 +341,7 @@ class GameService {
         { where: { id: botStat.id } }
       );
 
-      console.log(finalists);
+      // // console.log(finalists);
 
       await giveCasksOnline(
         aWss,
@@ -356,7 +359,7 @@ class GameService {
         playedgameId
       );
     } catch (error) {
-      console.log(error);
+      // console.log(error);
     }
   }
 
@@ -385,7 +388,7 @@ class GameService {
 
       return res.status(200).json("Вы купили карточку");
     } catch (e) {
-      console.log(e);
+      // console.log(e);
     }
   }
 
@@ -396,8 +399,8 @@ class GameService {
       let tickets = msg.tickets;
       const user = await User.findOne({ where: { id: msg.userId } });
       // check if user has enough money
-      console.log(user.balance);
-      console.log(tickets.length * roomComminsionInfo.fullBet);
+      // // console.log(user.balance);
+      // // console.log(tickets.length * roomComminsionInfo.fullBet);
       if (user.balance < tickets.length * roomComminsionInfo.fullBet) {
         return false;
       }
@@ -492,7 +495,7 @@ class GameService {
 
       setTimeout(async () => {
         await this.startLotoGame(ws, aWss, msg);
-      }, 20000);
+      }, 60000);
 
       const date = await axios.get(
         "https://timeapi.io/api/Time/current/zone?timeZone=Europe/London",
@@ -721,15 +724,15 @@ async function giveCasksOnline(
             finalists.winners.data = [botInfo];
           }
 
-          console.log(finalists);
-          console.log(finalists.winners.data);
+          // // console.log(finalists);
+          // // console.log(finalists.winners.data);
 
           // delete users that dont have tickets from finalists.winners.data
           finalists.winners.data = finalists.winners.data.filter(
             (data) => data.cards.length > 0
           );
 
-          console.log(finalists.winners.data);
+          // // console.log(finalists.winners.data);
           // {userName: bebra, cards: [[fdf, fdf, dfd], [fdf12, fdf4, dfd]]}
 
           // отправляем вообщение об выиграной игре

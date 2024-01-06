@@ -86,7 +86,12 @@ class UserService {
     const authorizationHeader = req.headers.authorization;
     const accessToken = authorizationHeader.split(" ")[1];
     const userData = tokenService.validateAccessToken(accessToken);
-    const user = await User.findOne({ where: { id: userData.id } });
+    const user = await User.findOne({
+      where: { id: userData.id, username: userData.username },
+    });
+    if (!user) {
+      throw ApiError.BadRequest("User not found!");
+    }
     return user;
   }
 

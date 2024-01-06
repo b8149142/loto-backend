@@ -178,8 +178,6 @@ class GameController {
       const { roomId } = req.params;
       const userId = req.user.id;
 
-      console.log(`room: ${roomId} - user: ${userId}`);
-
       const roomCards = await LotoCard.findAll({
         where: { gameLevel: roomId },
       });
@@ -470,7 +468,6 @@ class GameController {
       });
 
       if (player && player.dominoGame) {
-        console.log(player);
         return res.status(200).json({
           message: true,
           roomInfo: {
